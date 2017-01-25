@@ -5,11 +5,13 @@ using System.Runtime.InteropServices;
 using Discord;
 using Discord.Commands;
 using MimmiBot.Properties;
+using System.Collections.Generic;
 
 namespace MimmiBot
 {
     internal class Core
     {
+        List<string> Admins = new List<string>();
         private readonly DiscordClient _bot;
         private readonly CommandService _commands;
 
@@ -53,7 +55,6 @@ namespace MimmiBot
                 await _bot.Connect(Settings.Default.token, TokenType.Bot);
                 _bot.SetGame("with Fire!");
             });
-
         }
 
         public void Bot_UserJoined(object sender, UserEventArgs e)
@@ -65,13 +66,28 @@ namespace MimmiBot
         {
 
         }
-
+        
         public void Bot_MessageReceived(object sender, MessageEventArgs e)
         {
-            var isUserAdmin = false;
+            
+            string currentuser = e.User.Name;
+            Random rand = new Random();
+            int messagetosend;
+            messagetosend = rand.Next(0, 3);
+                    var isUserAdmin = false;
             foreach (var role in e.User.Roles)
             {
-                if (role.ToString() == "Ember Keeper") isUserAdmin = true;
+                if (role.ToString() == "Ember Keeper")
+                {
+                    isUserAdmin = true;
+                }
+            }
+
+            bool Contains = false;
+            Contains = Admins.Any(s => e.User.Name.Contains(s));
+            if (Contains)
+            {
+                isUserAdmin = true;
             }
 
             var str = e.Message.RawText.Split(Convert.ToChar(" "));
@@ -81,17 +97,110 @@ namespace MimmiBot
                 var userId = str[Convert.ToInt32(Command.Uid)].Replace("<@!", "<@");
                 var pointsToAdd = Convert.ToInt32(str[Convert.ToInt32(Command.Points)]);
                 newPoints = CalcNewpoints(GetPoints(userId), Convert.ToInt32(str[Convert.ToInt32(Command.Points)]), true);
-                SetPoints(userId, newPoints);
-                e.Channel.SendMessage(pointsToAdd + " Embers added to " + userId);
+                if (pointsToAdd == 0)
+                {
+                    if (messagetosend == 0)
+                        e.Channel.SendMessage("We thought it was implied... but it needs to be a number greater than 0 ^.^");
+                    else if (messagetosend == 1)
+                        e.Channel.SendMessage("Are you a hacher? Please do not try to break my code!");
+                    else if (messagetosend == 2)
+                        e.Channel.SendMessage("Please do not make me feel that I'm useless. :cry: ");
+                }
+                else
+                {
+                    SetPoints(userId, newPoints);
+                    e.Channel.SendMessage(pointsToAdd + " Embers added to " + userId);
+                }
             }
-            else if (e.Message.RawText.ToLower().StartsWith(".re") && isUserAdmin)
+
+            else if (e.Message.RawText.ToLower().StartsWith(".re") && str.Length == 3 && isUserAdmin)
             {
+                Random rand_ = new Random();
+                int messagetosend_;
+                messagetosend_ = rand_.Next(0, 3);
                 var userId = str[Convert.ToInt32(Command.Uid)].Replace("<@!", "<@");
                 var pointsToAdd = Convert.ToInt32(str[Convert.ToInt32(Command.Points)]);
                 newPoints = CalcNewpoints(GetPoints(userId), Convert.ToInt32(str[Convert.ToInt32(Command.Points)]), false);
-                SetPoints(userId, newPoints);
-                e.Channel.SendMessage(pointsToAdd + " Embers removed from " + userId);
+                if (pointsToAdd == 0)
+                {
+                    if (messagetosend_ == 0)
+                        e.Channel.SendMessage("We thought it was implied... but it needs to be a number greater than 0 ^.^");
+                    else if (messagetosend_ == 1)
+                        e.Channel.SendMessage("Are you a hacher? Please do not try to break my code!");
+                    else if (messagetosend == 2)
+                        e.Channel.SendMessage("Please do not make me feel that I'm useless. :cry: ");
+                }
+                else
+                {
+                    if (newPoints < 0)
+                    {
+                        pointsToAdd = pointsToAdd - (pointsToAdd + newPoints);
+                        e.Channel.SendMessage("Insufficient funds... ");
+                        if (pointsToAdd == 1)
+                            e.Channel.SendMessage("You need " + pointsToAdd + " more Ember for this.");
+                        else
+                            e.Channel.SendMessage("You need " + pointsToAdd + " more Embers for this.");
+                    }
+                    else
+                    {
+                        SetPoints(userId, newPoints);
+                        e.Channel.SendMessage(pointsToAdd + " Embers removed from " + userId);
+                    }
+                }
             }
+
+            else if (e.Message.RawText.ToLower().StartsWith(".ae"))
+            {
+                string userId;
+                if (str.Length > 1 && isUserAdmin)
+                {
+                    userId = str[1];
+                }
+                else if (str.Length == 1)
+                {
+                    userId = e.User.NicknameMention;
+                }
+                else
+                {
+                    return;
+                }
+
+                if (isUserAdmin)
+                    e.Channel.SendMessage(userId + " Type just \".ae\" in the chat to add embers.");
+                else
+                    e.Channel.SendMessage(userId + " You need to have the 'Admin' rank to use this command.");
+            }
+
+            else if (e.Message.RawText.ToLower().StartsWith(".refresh"))
+            {
+                if (!Admins.Contains(e.User.Name))
+                    Admins.Add(e.User.Name);
+                for (int i = 0; i < 10; )
+                e.Channel.SendMessage("Adminlist refreshed.");
+            }
+
+            else if (e.Message.RawText.ToLower().StartsWith(".re"))
+            {
+                string userId;
+                if (str.Length > 1 && isUserAdmin)
+                {
+                    userId = str[1];
+                }
+                else if (str.Length == 1)
+                {
+                    userId = e.User.NicknameMention;
+                }
+                else
+                {
+                    return;
+                }
+
+                if (isUserAdmin)
+                    e.Channel.SendMessage(userId + " Type just \".re\" in the chat to remove embers.");
+                else
+                    e.Channel.SendMessage(userId + " You need to have the 'Admin' rank to use this command.");
+            }
+
             else if (e.Message.RawText.ToLower().StartsWith(".embers"))
             {
                 string userId;
@@ -111,6 +220,7 @@ namespace MimmiBot
                 userId = userId.Replace("<@!", "<@");
                 e.Channel.SendMessage(userId + " Your current points balance is " + GetPoints(userId));
             }
+          
         }
 
         private void DeleteLastMessage()
@@ -176,6 +286,7 @@ namespace MimmiBot
             {
                 using (var sw = new StreamWriter("Data/Points.txt"))
                 {
+
                 }
             }
             var lines = File.ReadAllLines("Data/Points.txt").ToList();
@@ -228,6 +339,5 @@ namespace MimmiBot
                 sw.WriteLine(e.Message);
             }
         }
-
     }
 }
