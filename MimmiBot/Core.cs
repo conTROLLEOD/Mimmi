@@ -13,10 +13,12 @@ namespace MimmiBot
     {
         List<string> Admins = new List<string>();
         List<string> UsersToKick = new List<string>();
+        List<string> Bannedusers = new List<string>();
         private readonly DiscordClient _bot;
         private readonly CommandService _commands;
         public ulong OutroChannelId;
         private string userId;
+        private int kickrate = 10;
 
         private enum Command
         {
@@ -62,8 +64,9 @@ namespace MimmiBot
 
         public void Bot_UserJoined(object sender, UserEventArgs e)
         {
-            userId =  "<@" + e.User.Id + ">";
-            Setwarnings(userId, 10);
+            userId = ("<@" + e.User.Id + ">").Replace("!", "");
+            if (!(Getwarnings(userId, true) == 1))
+                Setwarnings(userId, 0, false);
         }
 
         public void Bot_UserLeft(object sender, UserEventArgs e)
@@ -81,16 +84,35 @@ namespace MimmiBot
 
         public void Bot_MessageReceived(object sender, MessageEventArgs e)
         {
-            userId = "@" + e.User.Name + "#" + e.User.Discriminator;
-            Setwarnings(userId, 10);
+            /*
+            Setwarnings(userId, 0, false);
+            UsersToKick.Remove(("<@" + e.User.Id + ">").Replace("!", ""));
+            Bannedusers.Remove(("<@" + e.User.Id + ">").Replace("!", ""));
+            */
             int messagetosend, newPoints;
             bool isUserAdmin;
             string[] str;
             Setup(e, out messagetosend, out isUserAdmin, out str);
-            if (UsersToKick.Contains("<@" + e.User.Id + ">"))
+
+            if (Bannedusers.Contains(("<@" + e.User.Id + ">").Replace("!", "")))
             {
                 e.User.Kick();
-                UsersToKick.Remove("<@" + e.User.Id + ">");
+                try
+                {
+                    var logChannel = e.Server.GetChannel(OutroChannelId);
+                    logChannel.SendMessage($"{e.User.Name} has been auto kicked from the magical Ember of Dreams (Gaming Community) Server.");
+                }
+                catch
+                {
+                    Console.WriteLine("You should install an outro channel with the \".setoutro\" command");
+                }
+            }
+
+            else if (UsersToKick.Contains(("<@" + e.User.Id + ">").Replace("!", "")))
+            {
+                e.User.Kick();
+                UsersToKick.Remove(("<@" + e.User.Id + ">").Replace("!", ""));
+                Setwarnings(userId, 0, true);
                 try
                 {
                     var logChannel = e.Server.GetChannel(OutroChannelId);
@@ -192,12 +214,40 @@ namespace MimmiBot
 
             else if (e.Message.RawText.ToLower().StartsWith(".warnings"))
             {
-                userId = "<@" + e.User.Id + ">";
-                var warnings = 10 - Getwarnings(userId);
-                if (warnings == 1)
-                    e.Channel.SendMessage(e.User.Mention + " You have been warned " + warnings + " time!");
+                userId = ("<@" + e.User.Id + ">").Replace("!", "");
+                bool iskickeduser = false;
+                if (Getwarnings(userId, true) == 1)
+                {
+                    iskickeduser = true;
+                }
+                if (!iskickeduser)
+                {
+                    try
+                    {
+                        Getwarnings(userId, false);
+                    }
+                    catch
+                    {
+                        Setwarnings(userId, 0, false);
+                    }
+                    if (Getwarnings(userId, false) > kickrate)
+                        Setwarnings(userId, kickrate, false);
+                    var warningsleft = kickrate - Getwarnings(userId, false);
+                    if (warningsleft == 0)
+                        e.Channel.SendMessage(e.User.Mention + " You have one more chance... If you don't change your behaviour you will be kicked from the server!");
+                    else
+                        e.Channel.SendMessage(e.User.Mention + " You have been warned " + Getwarnings(userId, false) + " times. After " + warningsleft + " more, you will be kicked from the server!");
+                }
                 else
-                    e.Channel.SendMessage(e.User.Mention + " You have been warned " + warnings + " times!");
+                {
+                    if (Getwarnings(userId, false) > kickrate)
+                        Setwarnings(userId, kickrate, false);
+                    var warningsleft = kickrate - Getwarnings(userId, false);
+                    if (warningsleft == 0)
+                        e.Channel.SendMessage(e.User.Mention + " You have one more chance... If you don't change your behaviour you will be banned from the server!");
+                    else
+                        e.Channel.SendMessage(e.User.Mention + " You have been warned " + (Getwarnings(userId, false) + 10) + " times. After " + warningsleft + " more, you will be banned from the server!");
+                }
             }
 
             else if (e.Message.RawText.ToLower().StartsWith(".setoutro") && isUserAdmin)
@@ -206,27 +256,49 @@ namespace MimmiBot
                 e.Channel.SendMessage("#" + e.Server.GetChannel(OutroChannelId) + " is the new outro channel.");
             }
 
+            else if (e.Message.RawText.ToLower().StartsWith(".setkickrate") && isUserAdmin)
+            {
+                kickrate = Convert.ToInt32(str[1]);
+                e.Channel.SendMessage(e.User.Mention + " Succesfully set the kickrate to " + kickrate + " warnings.");
+            }
+
             else if ((e.Message.RawText.StartsWith(".warn") && isUserAdmin) || (e.Message.RawText.StartsWith(".warn") && Admins.Contains("@" + e.User.Name + "#" + e.User.Discriminator)))
             {
                 userId = str[Convert.ToInt32(Command.Uid)];
+                bool iskickeduser = false;
+                if (Getwarnings(userId, true) == 1)
+                {
+                    iskickeduser = true;
+                }
                 try
                 {
-                    Getwarnings(userId);
+                    Getwarnings(userId, false);
                 }
                 catch
                 {
-                    Setwarnings(userId, 10);
+                    Setwarnings(userId, 0, iskickeduser);
                 }
-
-                if (!(Getwarnings(userId) == 0))
-                    Setwarnings(userId, Getwarnings(userId) - 1);
+                if (Getwarnings(userId, false) > kickrate)
+                    Setwarnings(userId, kickrate, iskickeduser);
+                if (!(Getwarnings(userId, false) == kickrate))
+                    Setwarnings(userId, Getwarnings(userId, false) + 1, iskickeduser);
                 else
-                    Setwarnings(userId, 0);
-                Console.WriteLine(Getwarnings(userId));
-                if (Getwarnings(userId) == 0)
                 {
-                    if (!UsersToKick.Contains(userId))
-                        UsersToKick.Add(userId);
+                    Setwarnings(userId, kickrate, iskickeduser);
+                    if (!iskickeduser)
+                    {
+                        if (!UsersToKick.Contains(userId))
+                        {
+                            UsersToKick.Add(userId);
+                        }
+                    }
+                    else
+                    {
+                        if (!Bannedusers.Contains(userId))
+                        {
+                            Bannedusers.Add(userId);
+                        }
+                    }
                 }
             }
         }
@@ -320,7 +392,7 @@ namespace MimmiBot
             return 0;
         }
 
-        private int Getwarnings(string uid)
+        private int Getwarnings(string uid, bool kickedusersearch)
         {
             try
             {
@@ -337,7 +409,10 @@ namespace MimmiBot
                 {
                     var userAttributes = line.Split(Convert.ToChar(";"));
                     if (userAttributes[0] != uid) continue;
-                    return Convert.ToInt32(userAttributes[1]);
+                    if (kickedusersearch)
+                        return Convert.ToInt32(userAttributes[2]);
+                    else
+                        return Convert.ToInt32(userAttributes[1]);
                 }
             }
             catch (Exception e)
@@ -386,7 +461,7 @@ namespace MimmiBot
             }
         }
 
-        private void Setwarnings(string uid, int Warnings)
+        private void Setwarnings(string uid, int Warnings, bool kickeduserset)
         {
             if (!Directory.Exists("Data/")) Directory.CreateDirectory("Data/");
             if (!File.Exists("Data/Warnings.txt"))
@@ -407,7 +482,10 @@ namespace MimmiBot
                 var lineNumber = Array.FindIndex(lineArr, row => row.Contains(uid));
                 if (line.Contains(uid))
                 {
-                    lineArr[lineNumber] = uid + ";" + Warnings;
+                    if (kickeduserset)
+                        lineArr[lineNumber] = uid + ";" + Warnings + ";" + 1;
+                    else
+                        lineArr[lineNumber] = uid + ";" + Warnings;
                 }
                 lines = lineArr.ToList();
                 lineFound = true;
@@ -419,7 +497,7 @@ namespace MimmiBot
             }
             else
             {
-                lines.Add(uid + ";" + 10);
+                lines.Add(uid + ";" + 0);
                 File.WriteAllLines("data/Warnings.txt", lines);
             }
         }
